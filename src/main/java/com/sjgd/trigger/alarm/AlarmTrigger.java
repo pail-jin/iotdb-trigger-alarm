@@ -39,10 +39,10 @@ public class AlarmTrigger implements Trigger {
         this.apiKeySecret = attributes.getString("X-API-Key-Secret");
         this.actionHookUrl = attributes.getString("actionHookUrl");
         logger.info("AlarmTrigger created with apiBaseUrl={}, rule_id={}, actionHookUrl={}", apiBaseUrl, ruleId, actionHookUrl);
-        // 拉取本rule配置
+        // 拉取本rule配置，失败只打印日志不抛异常
         this.rule = fetchRuleFromApi();
         if (rule == null) {
-            throw new RuntimeException("Failed to fetch rule from API, rule_id=" + ruleId);
+            logger.error("Failed to fetch rule from API, rule_id={}", ruleId);
         }
     }
 
@@ -61,6 +61,15 @@ public class AlarmTrigger implements Trigger {
     @Override
     public boolean fire(Tablet tablet) throws Exception {
         try {
+            // 若rule为null，重试fetchRuleFromApi一次
+            if (rule == null) {
+                logger.warn("Rule is null in fire, retrying fetchRuleFromApi, rule_id={}", ruleId);
+                rule = fetchRuleFromApi();
+                if (rule == null) {
+                    logger.error("Still failed to fetch rule from API in fire, rule_id={}, skip this fire.", ruleId);
+                    return false;
+                }
+            }
             String devicePath = tablet.deviceId;
             long[] timestamps = tablet.timestamps;
             List<MeasurementSchema> schemas = tablet.getSchemas();
@@ -124,7 +133,7 @@ public class AlarmTrigger implements Trigger {
      */
     private AlarmRule fetchRuleFromApi() {
         try {
-            String url = apiBaseUrl + "/api/v1/alarms/rule/" + ruleId;
+            String url = apiBaseUrl + "/api/v1/alarms/rules/get/" + ruleId;
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("X-API-Key-ID", apiKeyId);
@@ -220,7 +229,7 @@ public class AlarmTrigger implements Trigger {
      */
     private void triggerAlarmHistory(String device, String measurement, Object value, long timestamp) {
         try {
-            String url = apiBaseUrl + "/api/v1/alarms/history";
+            String url = apiBaseUrl + "/api/v1/alarms/history/createupdate";
             String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
                     ruleId, device, measurement, value, timestamp);
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
