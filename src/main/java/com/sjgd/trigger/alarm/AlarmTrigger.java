@@ -42,11 +42,9 @@ public class AlarmTrigger implements Trigger {
         }
     }
 
-    @Override
+    // 去掉onDrop/onStart/onStop的@Override注解
     public void onDrop() { logger.info("AlarmTrigger dropped"); }
-    @Override
     public void onStart() { logger.info("AlarmTrigger started"); }
-    @Override
     public void onStop() { logger.info("AlarmTrigger stopped"); }
 
     @Override
@@ -83,16 +81,26 @@ public class AlarmTrigger implements Trigger {
         }
     }
 
+    /**
+     * 修正Tablet数据访问方式
+     */
     private Object getValue(Tablet tablet, int rowIndex, int columnIndex, TSDataType dataType) {
         try {
             switch (dataType) {
-                case INT32: return tablet.values[columnIndex].getInt(rowIndex);
-                case INT64: return tablet.values[columnIndex].getLong(rowIndex);
-                case FLOAT: return tablet.values[columnIndex].getFloat(rowIndex);
-                case DOUBLE: return tablet.values[columnIndex].getDouble(rowIndex);
-                case BOOLEAN: return tablet.values[columnIndex].getBoolean(rowIndex);
-                case TEXT: return tablet.values[columnIndex].getBinary(rowIndex).getStringValue();
-                default: return null;
+                case INT32:
+                    return ((int[]) tablet.values[columnIndex])[rowIndex];
+                case INT64:
+                    return ((long[]) tablet.values[columnIndex])[rowIndex];
+                case FLOAT:
+                    return ((float[]) tablet.values[columnIndex])[rowIndex];
+                case DOUBLE:
+                    return ((double[]) tablet.values[columnIndex])[rowIndex];
+                case BOOLEAN:
+                    return ((boolean[]) tablet.values[columnIndex])[rowIndex];
+                case TEXT:
+                    return ((org.apache.iotdb.tsfile.utils.Binary[]) tablet.values[columnIndex])[rowIndex].getStringValue();
+                default:
+                    return null;
             }
         } catch (Exception e) {
             logger.warn("Error getting value at row={}, column={}, type={}", rowIndex, columnIndex, dataType, e);
