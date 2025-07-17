@@ -42,7 +42,7 @@ public class AlarmTrigger implements Trigger {
         }
     }
 
-    // 去掉onDrop/onStart/onStop的@Override注解
+    // 移除所有未实现或多余的@Override注解
     public void onDrop() { logger.info("AlarmTrigger dropped"); }
     public void onStart() { logger.info("AlarmTrigger started"); }
     public void onStop() { logger.info("AlarmTrigger stopped"); }
