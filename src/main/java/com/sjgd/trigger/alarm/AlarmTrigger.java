@@ -133,7 +133,7 @@ public class AlarmTrigger implements Trigger {
      */
     private AlarmRule fetchRuleFromApi() {
         try {
-            String url = apiBaseUrl + "/api/v1/alarms/rules/get/" + ruleId;
+            String url = apiBaseUrl + "/api/v1/alarm/rules/get/" + ruleId;
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("X-API-Key-ID", apiKeyId);
@@ -229,7 +229,7 @@ public class AlarmTrigger implements Trigger {
      */
     private void triggerAlarmHistory(String device, String measurement, Object value, long timestamp) {
         try {
-            String url = apiBaseUrl + "/api/v1/alarms/history/createupdate";
+            String url = apiBaseUrl + "/api/v1/alarm/history/createupdate";
             String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
                     ruleId, device, measurement, value, timestamp);
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
