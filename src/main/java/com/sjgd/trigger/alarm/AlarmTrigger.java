@@ -13,13 +13,16 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
 import java.util.Scanner;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * IoTDB告警触发器（单规则、单测点/单pattern高性能版）
+ * IoTDB告警触发器，参考官方示例风格
  */
 public class AlarmTrigger implements Trigger {
     private static final Logger logger = LoggerFactory.getLogger(AlarmTrigger.class);
 
+    // 触发器参数
     private String apiBaseUrl;
     private String ruleId;
     private String apiKeyId;
@@ -29,6 +32,7 @@ public class AlarmTrigger implements Trigger {
 
     @Override
     public void onCreate(TriggerAttributes attributes) throws Exception {
+        // 初始化参数、资源
         this.apiBaseUrl = attributes.getString("apiBaseUrl");
         this.ruleId = attributes.getString("rule_id");
         this.apiKeyId = attributes.getString("X-API-Key-ID");
@@ -42,13 +46,20 @@ public class AlarmTrigger implements Trigger {
         }
     }
 
-    // 移除所有未实现或多余的@Override注解
-    public void onDrop() { logger.info("AlarmTrigger dropped"); }
-    public void onStart() { logger.info("AlarmTrigger started"); }
-    public void onStop() { logger.info("AlarmTrigger stopped"); }
+    @Override
+    public void onDrop() throws Exception {
+        // 资源释放、清理
+        logger.info("AlarmTrigger dropped");
+    }
 
     @Override
-    public void fire(Tablet tablet, TriggerAttributes attributes) {
+    public void restore() throws Exception {
+        // 状态恢复（如有需要）
+        logger.info("AlarmTrigger restore called");
+    }
+
+    @Override
+    public boolean fire(Tablet tablet) throws Exception {
         try {
             String devicePath = tablet.deviceId;
             long[] timestamps = tablet.timestamps;
@@ -60,8 +71,7 @@ public class AlarmTrigger implements Trigger {
                     String measurementName = schema.getMeasurementId();
                     TSDataType dataType = schema.getType();
                     Object value = getValue(tablet, i, j, dataType);
-                    // 构造本次遥测数据字典
-                    java.util.Map<String, Object> telemetryDict = new java.util.HashMap<>();
+                    Map<String, Object> telemetryDict = new HashMap<>();
                     telemetryDict.put(measurementName, value);
                     if (rule != null && rule.getConditions() != null && !rule.getConditions().isEmpty()) {
                         boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
@@ -70,14 +80,15 @@ public class AlarmTrigger implements Trigger {
                             triggerActionHook(devicePath, measurementName, value, timestamp);
                         }
                     } else if (value != null && matchCondition(value)) {
-                        // 兼容无conditions的简单阈值
                         triggerAlarmHistory(devicePath, measurementName, value, timestamp);
                         triggerActionHook(devicePath, measurementName, value, timestamp);
                     }
                 }
             }
+            return true;
         } catch (Exception e) {
             logger.error("Error in fire", e);
+            return false;
         }
     }
 
