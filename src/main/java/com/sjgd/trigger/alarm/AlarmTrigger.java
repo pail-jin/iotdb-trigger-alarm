@@ -136,12 +136,18 @@ public class AlarmTrigger implements Trigger {
                 if (!telemetryDict.isEmpty()) {
                     boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
                     if (triggered) {
-                        logger.info("*** ALARM TRIGGERED *** Device: {}, Timestamp: {}", devicePath, timestamp);
-                        // 触发告警，使用第一个测点作为主要测点
-                        String firstMeasurement = telemetryDict.keySet().iterator().next();
-                        Object firstValue = telemetryDict.get(firstMeasurement);
-                        triggerAlarmHistory(devicePath, firstMeasurement, firstValue, timestamp);
-                        triggerActionHook(devicePath, firstMeasurement, firstValue, timestamp);
+                        Map<String, Object> triggeredTelemetry = new HashMap<>();
+                        for (AlarmCondition cond : rule.getConditions()) {
+                            String propId = cond.getPropertyIdentifier();
+                            if (telemetryDict.containsKey(propId)) {
+                                triggeredTelemetry.put(propId, telemetryDict.get(propId));
+                            }
+                        }
+                        if (!triggeredTelemetry.isEmpty()) {
+                            logger.info("*** ALARM TRIGGERED *** Device: {}, Timestamp: {}", devicePath, timestamp);
+                            triggerAlarmHistory(devicePath, triggeredTelemetry, timestamp);
+                            triggerActionHook(devicePath, triggeredTelemetry, timestamp);
+                        }
                     }
                 }
             }
@@ -391,13 +397,27 @@ public class AlarmTrigger implements Trigger {
     /**
      * 触发告警历史记录
      */
-    private void triggerAlarmHistory(String device, String measurement, Object value, long timestamp) {
+    private void triggerAlarmHistory(String device, Map<String, Object> telemetry, long timestamp) {
         try {
             String url = apiBaseUrl + "/api/v1/alarm/history/createupdate";
-            String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
-                    ruleId, device, measurement, value, timestamp);
+            // 构造json字符串，telemetry序列化为json
+            StringBuilder telemetryJson = new StringBuilder("{");
+            int idx = 0;
+            for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
+                if (idx++ > 0) telemetryJson.append(",");
+                telemetryJson.append("\"").append(entry.getKey()).append("\":");
+                Object v = entry.getValue();
+                if (v instanceof Number || v instanceof Boolean) {
+                    telemetryJson.append(v);
+                } else {
+                    telemetryJson.append("\"").append(v).append("\"");
+                }
+            }
+            telemetryJson.append("}");
+            String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"telemetry\":%s,\"timestamp\":%d}",
+                    ruleId, device, telemetryJson.toString(), timestamp);
             
-            logger.info("Triggering alarm history API: {}", url);
+            logger.info("Triggering alarm history API: {} payload={}", url, payload);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("POST");
@@ -423,17 +443,30 @@ public class AlarmTrigger implements Trigger {
     /**
      * 触发动作钩子
      */
-    private void triggerActionHook(String device, String measurement, Object value, long timestamp) {
+    private void triggerActionHook(String device, Map<String, Object> telemetry, long timestamp) {
         if (actionHookUrl == null || actionHookUrl.isEmpty()) {
             logger.info("Action hook URL is null or empty, skipping");
             return;
         }
         
         try {
-            String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
-                    ruleId, device, measurement, value, timestamp);
+            StringBuilder telemetryJson = new StringBuilder("{");
+            int idx = 0;
+            for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
+                if (idx++ > 0) telemetryJson.append(",");
+                telemetryJson.append("\"").append(entry.getKey()).append("\":");
+                Object v = entry.getValue();
+                if (v instanceof Number || v instanceof Boolean) {
+                    telemetryJson.append(v);
+                } else {
+                    telemetryJson.append("\"").append(v).append("\"");
+                }
+            }
+            telemetryJson.append("}");
+            String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"telemetry\":%s,\"timestamp\":%d}",
+                    ruleId, device, telemetryJson.toString(), timestamp);
             
-            logger.info("Triggering action hook: {}", actionHookUrl);
+            logger.info("Triggering action hook: {} payload={}", actionHookUrl, payload);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(actionHookUrl).openConnection();
             conn.setRequestMethod("POST");
