@@ -4,6 +4,9 @@ import org.apache.iotdb.trigger.api.Trigger;
 import org.apache.iotdb.trigger.api.TriggerAttributes;
 import org.apache.iotdb.trigger.api.enums.FailureStrategy;
 import org.apache.tsfile.write.record.Tablet;
+import org.apache.tsfile.enums.TSDataType;
+import org.apache.tsfile.utils.BitMap;
+import org.apache.tsfile.utils.Binary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,21 +99,26 @@ public class AlarmTrigger implements Trigger {
                 List<IMeasurementSchema> measurementSchemaList = tablet.getSchemas();
                 logger.info("Total measurements count: {}", measurementSchemaList.size());
                 
+                // 参考官方示例的处理方式
                 for (int j = 0; j < measurementSchemaList.size(); j++) {
                     IMeasurementSchema schema = measurementSchemaList.get(j);
-                    Object[] columnValues = (Object[]) tablet.getValues()[j];
-                    logger.info("Column[{}]: schema={}, columnValues={}", j, schema.getType(), columnValues);
+                    TSDataType dataType = schema.getType();
+                    String measurementName = schema.getMeasurementId();
                     
-                    if (columnValues != null && i < columnValues.length) {
-                        Object value = columnValues[i];
-                        logger.info("Column[{}] value[{}]: {}", j, i, value);
-                        
-                        if (value != null) {
-                            // 使用索引作为key，因为无法直接获取measurement名称
-                            String measurementKey = "measurement_" + j;
-                            telemetryDict.put(measurementKey, value);
-                            logger.info("Added to telemetryDict: {} = {}", measurementKey, value);
-                        }
+                    // 检查位图，如果该位置被标记为空，跳过
+                    BitMap[] bitMaps = tablet.getBitMaps();
+                    if (bitMaps != null && bitMaps[j] != null && bitMaps[j].isMarked(i)) {
+                        logger.info("Column[{}]: name={}, schema={}, value=null (marked as null)", j, measurementName, dataType);
+                        continue;
+                    }
+                    
+                    Object value = getValueFromTablet(tablet, j, i, dataType);
+                    logger.info("Column[{}]: name={}, schema={}, value={}", j, measurementName, dataType, value);
+                    
+                    if (value != null) {
+                        // 使用实际的测点名称作为key
+                        telemetryDict.put(measurementName, value);
+                        logger.info("Added to telemetryDict: {} = {}", measurementName, value);
                     }
                 }
                 
@@ -191,6 +199,50 @@ public class AlarmTrigger implements Trigger {
         } catch (Exception e) {
             logger.warn("Failed to get IoTDB version: {}", e.getMessage());
             return "2.0.3";
+        }
+    }
+
+    /**
+     * 从Tablet中安全获取指定列和行的值
+     */
+    private Object getValueFromTablet(Tablet tablet, int columnIndex, int rowIndex, TSDataType dataType) {
+        try {
+            Object[] values = tablet.getValues();
+            if (values == null || columnIndex >= values.length) {
+                return null;
+            }
+            
+            Object columnData = values[columnIndex];
+            if (columnData == null) {
+                return null;
+            }
+            
+            // 根据数据类型安全地获取值（位图检查已在fire方法中处理）
+            if (dataType.equals(TSDataType.BOOLEAN)) {
+                boolean[] boolArray = (boolean[]) columnData;
+                return rowIndex < boolArray.length ? boolArray[rowIndex] : null;
+            } else if (dataType.equals(TSDataType.INT32)) {
+                int[] intArray = (int[]) columnData;
+                return rowIndex < intArray.length ? intArray[rowIndex] : null;
+            } else if (dataType.equals(TSDataType.INT64)) {
+                long[] longArray = (long[]) columnData;
+                return rowIndex < longArray.length ? longArray[rowIndex] : null;
+            } else if (dataType.equals(TSDataType.FLOAT)) {
+                float[] floatArray = (float[]) columnData;
+                return rowIndex < floatArray.length ? floatArray[rowIndex] : null;
+            } else if (dataType.equals(TSDataType.DOUBLE)) {
+                double[] doubleArray = (double[]) columnData;
+                return rowIndex < doubleArray.length ? doubleArray[rowIndex] : null;
+            } else if (dataType.equals(TSDataType.TEXT)) {
+                Binary[] binaryArray = (Binary[]) columnData;
+                return rowIndex < binaryArray.length ? binaryArray[rowIndex].getStringValue() : null;
+            } else {
+                logger.warn("Unsupported data type: {}", dataType);
+                return null;
+            }
+        } catch (Exception e) {
+            logger.error("Error getting value from tablet: column={}, row={}, type={}", columnIndex, rowIndex, dataType, e);
+            return null;
         }
     }
 
@@ -303,23 +355,23 @@ public class AlarmTrigger implements Trigger {
             double th2 = threshold2 != null ? Double.parseDouble(threshold2) : 0;
             
             boolean result = false;
-            switch (type) {
-                case "GREATER_THAN": 
+            switch (type.toLowerCase()) {
+                case "greater_than": 
                     result = numericValue > th;
                     break;
-                case "LESS_THAN": 
+                case "less_than": 
                     result = numericValue < th;
                     break;
-                case "EQUAL_TO": 
+                case "equal_to": 
                     result = numericValue == th;
                     break;
-                case "NOT_EQUAL_TO": 
+                case "not_equal_to": 
                     result = numericValue != th;
                     break;
-                case "BETWEEN": 
+                case "between": 
                     result = th2 != 0 ? (numericValue >= th && numericValue <= th2) : false;
                     break;
-                case "NOT_BETWEEN": 
+                case "not_between": 
                     result = th2 != 0 ? !(numericValue >= th && numericValue <= th2) : false;
                     break;
                 default: 

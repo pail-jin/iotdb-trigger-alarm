@@ -6,7 +6,7 @@
     
     <groupId>com.sjgd.trigger</groupId>
     <artifactId>iotdb-alarm-trigger</artifactId>
-    <version>1.8</version>
+    <version>1.9</version>
     <packaging>jar</packaging>
     
     <name>IoTDB Alarm Trigger</name>
@@ -123,6 +123,13 @@
                                 <manifest>
                                     <addClasspath>true</addClasspath>
                                     <mainClass>com.sjgd.trigger.alarm.AlarmTrigger</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Title>IoTDB Alarm Trigger</Implementation-Title>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                        <Implementation-Vendor>com.sjgd</Implementation-Vendor>
+                                        <Built-By>${user.name}</Built-By>
+                                        <Build-Time>${maven.build.timestamp}</Build-Time>
+                                    </manifestEntries>
                                 </manifest>
                             </archive>
                         </configuration>
