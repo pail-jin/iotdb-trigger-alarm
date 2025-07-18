@@ -87,7 +87,6 @@ public class AlarmTrigger implements Trigger {
                 return true;
             }
 
-            String[] measurements = tablet.getMeasurements();
             List<IMeasurementSchema> schemaList = tablet.getSchemas();
             BitMap[] bitMaps = tablet.getBitMaps();
             long[] timestamps = tablet.getTimestamps();
@@ -102,7 +101,7 @@ public class AlarmTrigger implements Trigger {
                 for (int j = 0; j < schemaList.size(); j++) {
                     // 跳过空值
                     if (bitMaps != null && bitMaps[j] != null && bitMaps[j].isMarked(i)) {
-                        logger.info("Column[{}]: name={}, schema={}, value=null (marked as null)", j, measurements[j], schemaList.get(j).getType());
+                        logger.info("Column[{}]: schema={}, value=null (marked as null)", j, schemaList.get(j).getType());
                         continue;
                     }
                     TSDataType type = schemaList.get(j).getType();
@@ -119,12 +118,14 @@ public class AlarmTrigger implements Trigger {
                     } else if (type == TSDataType.BOOLEAN) {
                         value = ((boolean[]) col)[i];
                     } else if (type == TSDataType.TEXT) {
-                        value = ((Binary[]) col)[i].getStringValue(StandardCharsets.UTF_8);
+                        value = ((Binary[]) col)[i].getStringValue();
                     }
-                    logger.info("Column[{}]: name={}, schema={}, value={}", j, measurements[j], type, value);
+                    logger.info("Column[{}]: schema={}, value={}", j, type, value);
                     if (value != null) {
-                        telemetryDict.put(measurements[j], value);
-                        logger.info("Added to telemetryDict: {} = {}", measurements[j], value);
+                        // 直接使用列索引作为key，与官方示例保持一致
+                        String key = "col_" + j;
+                        telemetryDict.put(key, value);
+                        logger.info("Added to telemetryDict: {} = {}", key, value);
                     }
                 }
 
