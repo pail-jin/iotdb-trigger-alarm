@@ -60,7 +60,8 @@ public class AlarmTrigger implements Trigger {
     @Override
     public boolean fire(Tablet tablet) throws Exception {
         try {
-            logger.debug("AlarmTrigger.fire() called for device: {}", tablet.deviceId);
+            String devicePath = tablet.getDeviceId();
+            logger.debug("AlarmTrigger.fire() called for device: {}", devicePath);
             
             // 若rule为null，重试fetchRuleFromApi一次
             if (rule == null) {
@@ -78,9 +79,8 @@ public class AlarmTrigger implements Trigger {
                 return true;
             }
             
-            String devicePath = tablet.deviceId;
-            long[] timestamps = tablet.timestamps;
-            Object[] values = tablet.values;
+            long[] timestamps = tablet.getTimestamps();
+            Object[] values = tablet.getValues();
             
             // 处理每个时间戳的数据
             for (int i = 0; i < timestamps.length; i++) {
@@ -93,7 +93,7 @@ public class AlarmTrigger implements Trigger {
                         Object value = java.lang.reflect.Array.get(values[j], i);
                         if (value != null) {
                             // 获取测点名称
-                            String measurement = tablet.getSchemas().get(j).getName();
+                            String measurement = tablet.getSchemas().get(j).getMeasurementId();
                             telemetryDict.put(measurement, value);
                             logger.debug("Measurement: {}, Value: {}", measurement, value);
                         }
