@@ -2,10 +2,8 @@ package com.sjgd.trigger.alarm;
 
 import org.apache.iotdb.trigger.api.Trigger;
 import org.apache.iotdb.trigger.api.TriggerAttributes;
-import org.apache.iotdb.tsfile.enums.TSDataType;
+import org.apache.iotdb.trigger.api.enums.FailureStrategy;
 import org.apache.iotdb.tsfile.write.record.Tablet;
-import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
-import org.apache.iotdb.tsfile.write.binary.Binary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,36 +81,40 @@ public class AlarmTrigger implements Trigger {
             
             String devicePath = tablet.deviceId;
             long[] timestamps = tablet.timestamps;
-            List<MeasurementSchema> schemas = tablet.getSchemas();
             
-            for (int i = 0; i < timestamps.length; i++) {
-                long timestamp = timestamps[i];
+            logger.info("Processing {} timestamps for device: {}", timestamps.length, devicePath);
+            
+            // 简化处理：只处理第一个时间戳的数据
+            if (timestamps.length > 0) {
+                long timestamp = timestamps[0];
                 logger.info("Processing timestamp: {}", timestamp);
                 
-                for (int j = 0; j < schemas.size(); j++) {
-                    MeasurementSchema schema = schemas.get(j);
-                    String measurementName = schema.getMeasurementId();
-                    TSDataType dataType = schema.getType();
-                    Object value = getValue(tablet, i, j, dataType);
-                    
-                    logger.info("Measurement: {}, Type: {}, Value: {}", measurementName, dataType, value);
-                    
-                    Map<String, Object> telemetryDict = new HashMap<>();
-                    telemetryDict.put(measurementName, value);
-                    
-                    if (rule != null && rule.getConditions() != null && !rule.getConditions().isEmpty()) {
-                        logger.info("Checking conditions for measurement: {}", measurementName);
-                        boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
-                        logger.info("Condition check result: {}", triggered);
+                // 获取所有测点数据
+                Object[] values = tablet.values;
+                if (values != null && values.length > 0) {
+                    // 假设第一个测点是temperature
+                    Object value = values[0];
+                    if (value != null && value.getClass().isArray()) {
+                        Object firstValue = java.lang.reflect.Array.get(value, 0);
+                        logger.info("Temperature value: {}", firstValue);
                         
-                        if (triggered) {
-                            logger.info("*** ALARM TRIGGERED *** Device: {}, Measurement: {}, Value: {}", 
-                                devicePath, measurementName, value);
-                            triggerAlarmHistory(devicePath, measurementName, value, timestamp);
-                            triggerActionHook(devicePath, measurementName, value, timestamp);
+                        Map<String, Object> telemetryDict = new HashMap<>();
+                        telemetryDict.put("temperature", firstValue);
+                        
+                        if (rule != null && rule.getConditions() != null && !rule.getConditions().isEmpty()) {
+                            logger.info("Checking conditions for temperature");
+                            boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
+                            logger.info("Condition check result: {}", triggered);
+                            
+                            if (triggered) {
+                                logger.info("*** ALARM TRIGGERED *** Device: {}, Measurement: temperature, Value: {}", 
+                                    devicePath, firstValue);
+                                triggerAlarmHistory(devicePath, "temperature", firstValue, timestamp);
+                                triggerActionHook(devicePath, "temperature", firstValue, timestamp);
+                            }
+                        } else {
+                            logger.warn("No conditions configured for rule {}, skipping alarm check", ruleId);
                         }
-                    } else {
-                        logger.warn("No conditions configured for rule {}, skipping alarm check", ruleId);
                     }
                 }
             }
@@ -124,32 +126,7 @@ public class AlarmTrigger implements Trigger {
         }
     }
 
-    /**
-     * 修正Tablet数据访问方式
-     */
-    private Object getValue(Tablet tablet, int rowIndex, int columnIndex, TSDataType dataType) {
-        try {
-            switch (dataType) {
-                case INT32:
-                    return ((int[]) tablet.values[columnIndex])[rowIndex];
-                case INT64:
-                    return ((long[]) tablet.values[columnIndex])[rowIndex];
-                case FLOAT:
-                    return ((float[]) tablet.values[columnIndex])[rowIndex];
-                case DOUBLE:
-                    return ((double[]) tablet.values[columnIndex])[rowIndex];
-                case BOOLEAN:
-                    return ((boolean[]) tablet.values[columnIndex])[rowIndex];
-                case TEXT:
-                    return ((Binary[]) tablet.values[columnIndex])[rowIndex].getStringValue();
-                default:
-                    return null;
-            }
-        } catch (Exception e) {
-            logger.warn("Error getting value at row={}, column={}, type={}", rowIndex, columnIndex, dataType, e);
-            return null;
-        }
-    }
+
 
     /**
      * 拉取本rule配置
