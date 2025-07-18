@@ -338,56 +338,60 @@ public class AlarmTrigger implements Trigger {
         String propId = cond.getPropertyIdentifier();
         logger.info("Checking condition: propId={}, type={}, threshold={}", 
             propId, cond.getConditionType(), cond.getThresholdValue());
-        
+
         if (!telemetryDict.containsKey(propId)) {
             logger.info("Property {} not found in telemetry data", propId);
             return false;
         }
-        
+
         Object value = telemetryDict.get(propId);
         if (value == null) {
             logger.info("Property {} value is null", propId);
             return false;
         }
-        
+
         String type = cond.getConditionType();
         String threshold = cond.getThresholdValue();
         String threshold2 = cond.getThresholdValue2();
-        
+
         try {
-            double numericValue = Double.parseDouble(value.toString());
-            double th = threshold != null ? Double.parseDouble(threshold) : 0;
-            double th2 = threshold2 != null ? Double.parseDouble(threshold2) : 0;
-            
             boolean result = false;
-            switch (type.toLowerCase()) {
-                case "greater_than": 
-                    result = numericValue > th;
-                    break;
-                case "less_than": 
-                    result = numericValue < th;
-                    break;
-                case "equal_to": 
-                    result = numericValue == th;
-                    break;
-                case "not_equal_to": 
-                    result = numericValue != th;
-                    break;
-                case "between": 
-                    result = th2 != 0 ? (numericValue >= th && numericValue <= th2) : false;
-                    break;
-                case "not_between": 
-                    result = th2 != 0 ? !(numericValue >= th && numericValue <= th2) : false;
-                    break;
-                default: 
-                    logger.warn("Unknown condition type: {}", type);
-                    return false;
+            if (value instanceof Number) {
+                double numericValue = ((Number) value).doubleValue();
+                double th = threshold != null && !threshold.isEmpty() ? Double.parseDouble(threshold) : 0;
+                double th2 = threshold2 != null && !threshold2.isEmpty() ? Double.parseDouble(threshold2) : 0;
+                switch (type.toLowerCase()) {
+                    case "greater_than": result = numericValue > th; break;
+                    case "less_than": result = numericValue < th; break;
+                    case "equal_to": result = numericValue == th; break;
+                    case "not_equal_to": result = numericValue != th; break;
+                    case "between": result = th2 != 0 ? (numericValue >= th && numericValue <= th2) : false; break;
+                    case "not_between": result = th2 != 0 ? !(numericValue >= th && numericValue <= th2) : false; break;
+                    default: logger.warn("Unknown condition type: {}", type); return false;
+                }
+            } else if (value instanceof Boolean) {
+                boolean boolValue = (Boolean) value;
+                boolean th = Boolean.parseBoolean(threshold);
+                switch (type.toLowerCase()) {
+                    case "equal_to": result = boolValue == th; break;
+                    case "not_equal_to": result = boolValue != th; break;
+                    default: logger.warn("Unsupported boolean condition type: {}", type); return false;
+                }
+            } else if (value instanceof String) {
+                String strValue = (String) value;
+                switch (type.toLowerCase()) {
+                    case "equal_to": result = strValue.equals(threshold); break;
+                    case "not_equal_to": result = !strValue.equals(threshold); break;
+                    default: logger.warn("Unsupported string condition type: {}", type); return false;
+                }
+            } else {
+                logger.warn("Unsupported value type: {} for property {}", value.getClass(), propId);
+                return false;
             }
-            
-            logger.info("Condition result: {} {} {} = {}", numericValue, type, threshold, result);
+            logger.info("Condition result: {} {} {} = {}", value, type, threshold, result);
             return result;
-        } catch (NumberFormatException e) {
-            logger.error("Failed to parse numeric value: {}", value, e);
+        } catch (Exception e) {
+            logger.error("Failed to compare value: [{}] for property [{}]", value, propId, e);
             return false;
         }
     }
