@@ -123,14 +123,14 @@
                                 <manifest>
                                     <addClasspath>true</addClasspath>
                                     <mainClass>com.sjgd.trigger.alarm.AlarmTrigger</mainClass>
-                                    <manifestEntries>
-                                        <Implementation-Title>IoTDB Alarm Trigger</Implementation-Title>
-                                        <Implementation-Version>${project.version}</Implementation-Version>
-                                        <Implementation-Vendor>com.sjgd</Implementation-Vendor>
-                                        <Built-By>${user.name}</Built-By>
-                                        <Build-Time>${maven.build.timestamp}</Build-Time>
-                                    </manifestEntries>
                                 </manifest>
+                                <manifestEntries>
+                                    <Implementation-Title>IoTDB Alarm Trigger</Implementation-Title>
+                                    <Implementation-Version>${project.version}</Implementation-Version>
+                                    <Implementation-Vendor>com.sjgd</Implementation-Vendor>
+                                    <Built-By>${user.name}</Built-By>
+                                    <Build-Time>${maven.build.timestamp}</Build-Time>
+                                </manifestEntries>
                             </archive>
                         </configuration>
                         <executions>
