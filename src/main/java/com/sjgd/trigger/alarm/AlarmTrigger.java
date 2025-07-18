@@ -180,16 +180,8 @@ public class AlarmTrigger implements Trigger {
      * 从manifest获取版本信息
      */
     private String getVersionFromManifest() {
-        try {
-            java.util.jar.Manifest manifest = new java.util.jar.Manifest(
-                AlarmTrigger.class.getClassLoader().getResourceAsStream("META-INF/MANIFEST.MF"));
-            java.util.jar.Attributes attributes = manifest.getMainAttributes();
-            String version = attributes.getValue("Implementation-Version");
-            return version != null ? version : "unknown";
-        } catch (Exception e) {
-            logger.warn("Failed to get version from manifest: {}", e.getMessage());
-            return "unknown";
-        }
+        String version = AlarmTrigger.class.getPackage().getImplementationVersion();
+        return version != null ? version : "unknown";
     }
     
     /**
