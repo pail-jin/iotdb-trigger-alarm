@@ -2,9 +2,10 @@ package com.sjgd.trigger.alarm;
 
 import org.apache.iotdb.trigger.api.Trigger;
 import org.apache.iotdb.trigger.api.TriggerAttributes;
-import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
+import org.apache.iotdb.tsfile.enums.TSDataType;
 import org.apache.iotdb.tsfile.write.record.Tablet;
 import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
+import org.apache.iotdb.tsfile.write.binary.Binary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,7 +141,7 @@ public class AlarmTrigger implements Trigger {
                 case BOOLEAN:
                     return ((boolean[]) tablet.values[columnIndex])[rowIndex];
                 case TEXT:
-                    return ((org.apache.iotdb.tsfile.utils.Binary[]) tablet.values[columnIndex])[rowIndex].getStringValue();
+                    return ((Binary[]) tablet.values[columnIndex])[rowIndex].getStringValue();
                 default:
                     return null;
             }
