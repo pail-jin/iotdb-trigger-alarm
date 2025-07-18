@@ -93,7 +93,7 @@ public class AlarmTrigger implements Trigger {
                         Object value = java.lang.reflect.Array.get(values[j], i);
                         if (value != null) {
                             // 获取测点名称
-                            String measurement = tablet.getSchemas().get(j).getMeasurementId();
+                            String measurement = tablet.getSchemas().get(j).getName();
                             telemetryDict.put(measurement, value);
                             logger.debug("Measurement: {}, Value: {}", measurement, value);
                         }
