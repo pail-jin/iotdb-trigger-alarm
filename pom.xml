@@ -29,6 +29,12 @@
             <version>2.0.3</version>
         </dependency>
         
+        <dependency>
+            <groupId>org.apache.tsfile</groupId>
+            <artifactId>tsfile</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
         <!-- IoTDB Server -->
         <dependency>
             <groupId>org.apache.iotdb</groupId>
@@ -36,11 +42,7 @@
             <version>2.0.3</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.tsfile</groupId>
-            <artifactId>tsfile</artifactId>
-            <version>2.0.3</version>
-        </dependency>
+
         <!-- HTTP客户端，用于调用告警API -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
