@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
 
+
 /**
  * IoTDB告警触发器，参考官方示例风格
  */
@@ -69,7 +70,7 @@ public class AlarmTrigger implements Trigger {
         try {
             String devicePath = tablet.getDeviceId();
             logger.info("AlarmTrigger.fire() called for device: {}", devicePath);
-            
+
             // 若rule为null，重试fetchRuleFromApi一次
             if (rule == null) {
                 logger.warn("Rule is null in fire, retrying fetchRuleFromApi, rule_id={}", ruleId);
@@ -79,67 +80,68 @@ public class AlarmTrigger implements Trigger {
                     return false;
                 }
             }
-            
+
             // 检查是否有配置条件
             if (rule.getConditions() == null || rule.getConditions().isEmpty()) {
                 logger.warn("No conditions configured for rule {}, skipping alarm check", ruleId);
                 return true;
             }
-            
+
+            String[] measurements = tablet.getMeasurements();
+            List<IMeasurementSchema> schemaList = tablet.getSchemas();
+            BitMap[] bitMaps = tablet.getBitMaps();
             long[] timestamps = tablet.getTimestamps();
             Object[] values = tablet.getValues();
-            
-            // 处理每个时间戳的数据
-            for (int i = 0; i < timestamps.length; i++) {
+            int rowSize = tablet.rowSize;
+
+            for (int i = 0; i < rowSize; i++) {
                 long timestamp = timestamps[i];
                 logger.info("=== Processing timestamp[{}]: {} ===", i, timestamp);
-                
-                // 构建测点数据字典
                 Map<String, Object> telemetryDict = new HashMap<>();
-                List<IMeasurementSchema> measurementSchemaList = tablet.getSchemas();
-                logger.info("Total measurements count: {}", measurementSchemaList.size());
-                
-                // 参考官方示例的处理方式
-                for (int j = 0; j < measurementSchemaList.size(); j++) {
-                    IMeasurementSchema schema = measurementSchemaList.get(j);
-                    TSDataType dataType = schema.getType();
-                    String measurementName = schema.getMeasurementId();
-                    
-                    // 检查位图，如果该位置被标记为空，跳过
-                    BitMap[] bitMaps = tablet.getBitMaps();
+
+                for (int j = 0; j < schemaList.size(); j++) {
+                    // 跳过空值
                     if (bitMaps != null && bitMaps[j] != null && bitMaps[j].isMarked(i)) {
-                        logger.info("Column[{}]: name={}, schema={}, value=null (marked as null)", j, measurementName, dataType);
+                        logger.info("Column[{}]: name={}, schema={}, value=null (marked as null)", j, measurements[j], schemaList.get(j).getType());
                         continue;
                     }
-                    
-                    Object value = getValueFromTablet(tablet, j, i, dataType);
-                    logger.info("Column[{}]: name={}, schema={}, value={}", j, measurementName, dataType, value);
-                    
+                    TSDataType type = schemaList.get(j).getType();
+                    Object col = values[j];
+                    Object value = null;
+                    if (type == TSDataType.DOUBLE) {
+                        value = ((double[]) col)[i];
+                    } else if (type == TSDataType.FLOAT) {
+                        value = ((float[]) col)[i];
+                    } else if (type == TSDataType.INT64) {
+                        value = ((long[]) col)[i];
+                    } else if (type == TSDataType.INT32) {
+                        value = ((int[]) col)[i];
+                    } else if (type == TSDataType.BOOLEAN) {
+                        value = ((boolean[]) col)[i];
+                    } else if (type == TSDataType.TEXT) {
+                        value = ((Binary[]) col)[i].getStringValue(StandardCharsets.UTF_8);
+                    }
+                    logger.info("Column[{}]: name={}, schema={}, value={}", j, measurements[j], type, value);
                     if (value != null) {
-                        // 使用实际的测点名称作为key
-                        telemetryDict.put(measurementName, value);
-                        logger.info("Added to telemetryDict: {} = {}", measurementName, value);
+                        telemetryDict.put(measurements[j], value);
+                        logger.info("Added to telemetryDict: {} = {}", measurements[j], value);
                     }
                 }
-                
+
                 logger.info("Final telemetryDict: {}", telemetryDict);
-                
                 // 检查条件
                 if (!telemetryDict.isEmpty()) {
                     boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
                     if (triggered) {
                         logger.info("*** ALARM TRIGGERED *** Device: {}, Timestamp: {}", devicePath, timestamp);
-                        
                         // 触发告警，使用第一个测点作为主要测点
                         String firstMeasurement = telemetryDict.keySet().iterator().next();
                         Object firstValue = telemetryDict.get(firstMeasurement);
-                        
                         triggerAlarmHistory(devicePath, firstMeasurement, firstValue, timestamp);
                         triggerActionHook(devicePath, firstMeasurement, firstValue, timestamp);
                     }
                 }
             }
-            
             return true;
         } catch (Exception e) {
             logger.error("Error in fire method", e);
