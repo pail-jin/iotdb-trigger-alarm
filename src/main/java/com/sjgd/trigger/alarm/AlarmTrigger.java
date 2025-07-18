@@ -91,7 +91,7 @@ public class AlarmTrigger implements Trigger {
             BitMap[] bitMaps = tablet.getBitMaps();
             long[] timestamps = tablet.getTimestamps();
             Object[] values = tablet.getValues();
-            int rowSize = tablet.rowSize;
+            int rowSize = tablet.getRowSize();
 
             for (int i = 0; i < rowSize; i++) {
                 long timestamp = timestamps[i];
@@ -118,7 +118,7 @@ public class AlarmTrigger implements Trigger {
                     } else if (type == TSDataType.BOOLEAN) {
                         value = ((boolean[]) col)[i];
                     } else if (type == TSDataType.TEXT) {
-                        value = ((Binary[]) col)[i].getStringValue();
+                        value = ((Binary[]) col)[i].getStringValue(StandardCharsets.UTF_8);
                     }
                     logger.info("Column[{}]: schema={}, value={}", j, type, value);
                     if (value != null) {
@@ -238,7 +238,7 @@ public class AlarmTrigger implements Trigger {
                 return rowIndex < doubleArray.length ? doubleArray[rowIndex] : null;
             } else if (dataType.equals(TSDataType.TEXT)) {
                 Binary[] binaryArray = (Binary[]) columnData;
-                return rowIndex < binaryArray.length ? binaryArray[rowIndex].getStringValue() : null;
+                return rowIndex < binaryArray.length ? binaryArray[rowIndex].getStringValue(StandardCharsets.UTF_8) : null;
             } else {
                 logger.warn("Unsupported data type: {}", dataType);
                 return null;
