@@ -6,7 +6,7 @@
     
     <groupId>com.sjgd.trigger</groupId>
     <artifactId>iotdb-alarm-trigger</artifactId>
-    <version>1.9</version>
+    <version>1.10</version>
     <packaging>jar</packaging>
     
     <name>IoTDB Alarm Trigger</name>
@@ -29,11 +29,11 @@
             <version>2.0.3</version>
         </dependency>
         
-        <dependency>
+        <!-- <dependency>
             <groupId>org.apache.tsfile</groupId>
             <artifactId>tsfile</artifactId>
             <version>2.0.3</version>
-        </dependency>
+        </dependency> -->
 
         <!-- IoTDB Server -->
         <dependency>

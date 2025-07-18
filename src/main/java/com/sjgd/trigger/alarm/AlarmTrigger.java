@@ -124,7 +124,8 @@ public class AlarmTrigger implements Trigger {
                     logger.info("Column[{}]: schema={}, value={}", j, type, value);
                     if (value != null) {
                         // 直接使用列索引作为key，与官方示例保持一致
-                        String key = "col_" + j;
+                        // String key = "col_" + j;
+                        String key = schemaList.get(j).getMeasurementName();
                         telemetryDict.put(key, value);
                         logger.info("Added to telemetryDict: {} = {}", key, value);
                     }
