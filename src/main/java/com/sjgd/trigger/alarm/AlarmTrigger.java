@@ -32,6 +32,9 @@ public class AlarmTrigger implements Trigger {
 
     @Override
     public void onCreate(TriggerAttributes attributes) throws Exception {
+        // 打印JAR包信息
+        printJarInfo();
+        
         // 初始化参数、资源
         this.apiBaseUrl = attributes.getString("apiBaseUrl");
         this.ruleId = attributes.getString("rule_id");
@@ -124,6 +127,61 @@ public class AlarmTrigger implements Trigger {
         } catch (Exception e) {
             logger.error("Error in fire method", e);
             return false;
+        }
+    }
+
+    /**
+     * 打印JAR包信息
+     */
+    private void printJarInfo() {
+        try {
+            // 获取当前类的JAR包信息
+            String jarPath = AlarmTrigger.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+            logger.info("=== IoTDB Alarm Trigger JAR Info ===");
+            logger.info("JAR Path: {}", jarPath);
+            logger.info("JAR Name: {}", jarPath.substring(jarPath.lastIndexOf('/') + 1));
+            
+            // 从manifest获取版本信息
+            String version = getVersionFromManifest();
+            logger.info("Version: {}", version);
+            
+            logger.info("Build Time: {}", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date()));
+            logger.info("Java Version: {}", System.getProperty("java.version"));
+            logger.info("IoTDB Version: {}", getIotdbVersion());
+            logger.info("=====================================");
+        } catch (Exception e) {
+            logger.warn("Failed to print JAR info: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * 从manifest获取版本信息
+     */
+    private String getVersionFromManifest() {
+        try {
+            java.util.jar.Manifest manifest = new java.util.jar.Manifest(
+                AlarmTrigger.class.getClassLoader().getResourceAsStream("META-INF/MANIFEST.MF"));
+            java.util.jar.Attributes attributes = manifest.getMainAttributes();
+            String version = attributes.getValue("Implementation-Version");
+            return version != null ? version : "unknown";
+        } catch (Exception e) {
+            logger.warn("Failed to get version from manifest: {}", e.getMessage());
+            return "unknown";
+        }
+    }
+    
+    /**
+     * 获取IoTDB版本
+     */
+    private String getIotdbVersion() {
+        try {
+            // 尝试从trigger-api包获取版本
+            Package triggerApiPackage = org.apache.iotdb.trigger.api.Trigger.class.getPackage();
+            String version = triggerApiPackage.getImplementationVersion();
+            return version != null ? version : "2.0.3";
+        } catch (Exception e) {
+            logger.warn("Failed to get IoTDB version: {}", e.getMessage());
+            return "2.0.3";
         }
     }
 
