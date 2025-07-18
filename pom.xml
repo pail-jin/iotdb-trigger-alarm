@@ -16,35 +16,31 @@
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <iotdb.version>1.2.0</iotdb.version>
+        <iotdb.version>2.0.3</iotdb.version>
     </properties>
     
-    <repositories>
-        <repository>
-            <id>apache.snapshots</id>
-            <url>https://repository.apache.org/content/repositories/snapshots</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
+
     
     <dependencies>
         <!-- IoTDB Trigger API -->
         <dependency>
             <groupId>org.apache.iotdb</groupId>
             <artifactId>trigger-api</artifactId>
-            <version>2.0.3-SNAPSHOT</version>
+            <version>$2.0.3</version>
         </dependency>
         
         <!-- IoTDB Server -->
         <dependency>
             <groupId>org.apache.iotdb</groupId>
             <artifactId>iotdb-server</artifactId>
-            <version>2.0.3-SNAPSHOT</version>
+            <version>2.0.3</version>
             <scope>provided</scope>
         </dependency>
-        
+        <dependency>
+            <groupId>org.apache.tsfile</groupId>
+            <artifactId>tsfile</artifactId>
+            <version>2.0.3</version>
+        </dependency>
         <!-- HTTP客户端，用于调用告警API -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
