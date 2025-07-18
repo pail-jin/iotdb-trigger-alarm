@@ -60,9 +60,7 @@ public class AlarmTrigger implements Trigger {
     @Override
     public boolean fire(Tablet tablet) throws Exception {
         try {
-            logger.info("=== AlarmTrigger.fire() called ===");
-            logger.info("Device: {}, Timestamps: {}, Schemas: {}", 
-                tablet.deviceId, tablet.timestamps.length, tablet.getSchemas().size());
+            logger.debug("AlarmTrigger.fire() called for device: {}", tablet.deviceId);
             
             // 若rule为null，重试fetchRuleFromApi一次
             if (rule == null) {
@@ -74,59 +72,56 @@ public class AlarmTrigger implements Trigger {
                 }
             }
             
-            logger.info("Rule loaded: {}", rule != null ? "success" : "failed");
-            if (rule != null && rule.getConditions() != null) {
-                logger.info("Rule conditions count: {}", rule.getConditions().size());
+            // 检查是否有配置条件
+            if (rule.getConditions() == null || rule.getConditions().isEmpty()) {
+                logger.warn("No conditions configured for rule {}, skipping alarm check", ruleId);
+                return true;
             }
             
             String devicePath = tablet.deviceId;
             long[] timestamps = tablet.timestamps;
+            Object[] values = tablet.values;
             
-            logger.info("Processing {} timestamps for device: {}", timestamps.length, devicePath);
-            
-            // 简化处理：只处理第一个时间戳的数据
-            if (timestamps.length > 0) {
-                long timestamp = timestamps[0];
-                logger.info("Processing timestamp: {}", timestamp);
+            // 处理每个时间戳的数据
+            for (int i = 0; i < timestamps.length; i++) {
+                long timestamp = timestamps[i];
                 
-                // 获取所有测点数据
-                Object[] values = tablet.values;
-                if (values != null && values.length > 0) {
-                    // 假设第一个测点是temperature
-                    Object value = values[0];
-                    if (value != null && value.getClass().isArray()) {
-                        Object firstValue = java.lang.reflect.Array.get(value, 0);
-                        logger.info("Temperature value: {}", firstValue);
-                        
-                        Map<String, Object> telemetryDict = new HashMap<>();
-                        telemetryDict.put("temperature", firstValue);
-                        
-                        if (rule != null && rule.getConditions() != null && !rule.getConditions().isEmpty()) {
-                            logger.info("Checking conditions for temperature");
-                            boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
-                            logger.info("Condition check result: {}", triggered);
-                            
-                            if (triggered) {
-                                logger.info("*** ALARM TRIGGERED *** Device: {}, Measurement: temperature, Value: {}", 
-                                    devicePath, firstValue);
-                                triggerAlarmHistory(devicePath, "temperature", firstValue, timestamp);
-                                triggerActionHook(devicePath, "temperature", firstValue, timestamp);
-                            }
-                        } else {
-                            logger.warn("No conditions configured for rule {}, skipping alarm check", ruleId);
+                // 构建测点数据字典
+                Map<String, Object> telemetryDict = new HashMap<>();
+                for (int j = 0; j < values.length; j++) {
+                    if (values[j] != null && values[j].getClass().isArray()) {
+                        Object value = java.lang.reflect.Array.get(values[j], i);
+                        if (value != null) {
+                            // 获取测点名称
+                            String measurement = tablet.getSchemas().get(j).getName();
+                            telemetryDict.put(measurement, value);
+                            logger.debug("Measurement: {}, Value: {}", measurement, value);
                         }
                     }
                 }
+                
+                // 检查条件
+                if (!telemetryDict.isEmpty()) {
+                    boolean triggered = checkConditions(rule.getConditions(), telemetryDict);
+                    if (triggered) {
+                        logger.info("*** ALARM TRIGGERED *** Device: {}, Timestamp: {}", devicePath, timestamp);
+                        
+                        // 触发告警，使用第一个测点作为主要测点
+                        String firstMeasurement = telemetryDict.keySet().iterator().next();
+                        Object firstValue = telemetryDict.get(firstMeasurement);
+                        
+                        triggerAlarmHistory(devicePath, firstMeasurement, firstValue, timestamp);
+                        triggerActionHook(devicePath, firstMeasurement, firstValue, timestamp);
+                    }
+                }
             }
-            logger.info("=== AlarmTrigger.fire() completed ===");
+            
             return true;
         } catch (Exception e) {
-            logger.error("Error in fire", e);
+            logger.error("Error in fire method", e);
             return false;
         }
     }
-
-
 
     /**
      * 拉取本rule配置
@@ -134,8 +129,7 @@ public class AlarmTrigger implements Trigger {
     private AlarmRule fetchRuleFromApi() {
         try {
             String url = apiBaseUrl + "/api/v1/alarm/rules/get/" + ruleId;
-            logger.info("Fetching rule from API: {}", url);
-            logger.info("API Key ID: {}, Secret: {}", apiKeyId, apiKeySecret != null ? "***" : "null");
+            logger.debug("Fetching rule from API: {}", url);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
@@ -145,16 +139,15 @@ public class AlarmTrigger implements Trigger {
             conn.setReadTimeout(3000);
             
             int code = conn.getResponseCode();
-            logger.info("API response code: {}", code);
+            logger.debug("API response code: {}", code);
             
             if (code == 200) {
                 Scanner scanner = new Scanner(conn.getInputStream(), "UTF-8").useDelimiter("\\A");
                 String json = scanner.hasNext() ? scanner.next() : "";
                 scanner.close();
-                logger.info("API response JSON: {}", json);
                 
                 AlarmRule rule = AlarmRule.fromJson(json);
-                logger.info("Rule parsed successfully: {}", rule != null);
+                logger.debug("Rule parsed successfully: {}", rule != null);
                 return rule;
             } else {
                 logger.error("fetchRuleFromApi failed, code={}, url={}", code, url);
@@ -175,15 +168,15 @@ public class AlarmTrigger implements Trigger {
         }
     }
 
-
-
     /**
      * 多条件组合判断，支持and/or
      */
-    private boolean checkConditions(java.util.List<AlarmCondition> conditions, java.util.Map<String, Object> telemetryDict) {
+    private boolean checkConditions(List<AlarmCondition> conditions, Map<String, Object> telemetryDict) {
         if (conditions == null || conditions.isEmpty()) return false;
+        
         AlarmCondition first = conditions.get(0);
         boolean result = checkSingleCondition(first, telemetryDict);
+        
         for (int i = 1; i < conditions.size(); i++) {
             AlarmCondition cond = conditions.get(i);
             boolean current = checkSingleCondition(cond, telemetryDict);
@@ -197,29 +190,27 @@ public class AlarmTrigger implements Trigger {
     }
 
     /**
-     * 单条件判断，复刻Python _check_single_condition
+     * 单条件判断
      */
-    private boolean checkSingleCondition(AlarmCondition cond, java.util.Map<String, Object> telemetryDict) {
+    private boolean checkSingleCondition(AlarmCondition cond, Map<String, Object> telemetryDict) {
         String propId = cond.getPropertyIdentifier();
-        logger.info("Checking condition: propId={}, type={}, threshold={}, threshold2={}", 
-            propId, cond.getConditionType(), cond.getThresholdValue(), cond.getThresholdValue2());
+        logger.debug("Checking condition: propId={}, type={}, threshold={}", 
+            propId, cond.getConditionType(), cond.getThresholdValue());
         
         if (!telemetryDict.containsKey(propId)) {
-            logger.info("Property {} not found in telemetry data", propId);
+            logger.debug("Property {} not found in telemetry data", propId);
             return false;
         }
         
         Object value = telemetryDict.get(propId);
         if (value == null) {
-            logger.info("Property {} value is null", propId);
+            logger.debug("Property {} value is null", propId);
             return false;
         }
         
         String type = cond.getConditionType();
         String threshold = cond.getThresholdValue();
         String threshold2 = cond.getThresholdValue2();
-        
-        logger.info("Comparing: value={} ({}) vs threshold={}", value, value.getClass().getSimpleName(), threshold);
         
         try {
             double numericValue = Double.parseDouble(value.toString());
@@ -230,57 +221,37 @@ public class AlarmTrigger implements Trigger {
             switch (type) {
                 case "GREATER_THAN": 
                     result = numericValue > th;
-                    logger.info("GREATER_THAN: {} > {} = {}", numericValue, th, result);
                     break;
                 case "LESS_THAN": 
                     result = numericValue < th;
-                    logger.info("LESS_THAN: {} < {} = {}", numericValue, th, result);
                     break;
                 case "EQUAL_TO": 
                     result = numericValue == th;
-                    logger.info("EQUAL_TO: {} == {} = {}", numericValue, th, result);
                     break;
                 case "NOT_EQUAL_TO": 
                     result = numericValue != th;
-                    logger.info("NOT_EQUAL_TO: {} != {} = {}", numericValue, th, result);
                     break;
                 case "BETWEEN": 
                     result = th2 != 0 ? (numericValue >= th && numericValue <= th2) : false;
-                    logger.info("BETWEEN: {} >= {} && {} <= {} = {}", numericValue, th, numericValue, th2, result);
                     break;
                 case "NOT_BETWEEN": 
                     result = th2 != 0 ? !(numericValue >= th && numericValue <= th2) : false;
-                    logger.info("NOT_BETWEEN: !({} >= {} && {} <= {}) = {}", numericValue, th, numericValue, th2, result);
                     break;
                 default: 
                     logger.warn("Unknown condition type: {}", type);
                     return false;
             }
+            
+            logger.debug("Condition result: {} {} {} = {}", numericValue, type, threshold, result);
             return result;
-        } catch (Exception e) {
-            logger.info("Numeric comparison failed, trying string comparison: {}", e.getMessage());
-            // 字符串比较
-            if (threshold == null) return false;
-            boolean result = false;
-            switch (type) {
-                case "EQUAL_TO": 
-                    result = value.toString().equals(threshold);
-                    logger.info("EQUAL_TO (string): '{}' == '{}' = {}", value, threshold, result);
-                    break;
-                case "NOT_EQUAL_TO": 
-                    result = !value.toString().equals(threshold);
-                    logger.info("NOT_EQUAL_TO (string): '{}' != '{}' = {}", value, threshold, result);
-                    break;
-                default: 
-                    logger.warn("Unknown string condition type: {}", type);
-                    return false;
-            }
-            return result;
+        } catch (NumberFormatException e) {
+            logger.error("Failed to parse numeric value: {}", value, e);
+            return false;
         }
     }
 
     /**
-     * 调用后端API，更新alarm history
+     * 触发告警历史记录
      */
     private void triggerAlarmHistory(String device, String measurement, Object value, long timestamp) {
         try {
@@ -288,8 +259,7 @@ public class AlarmTrigger implements Trigger {
             String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
                     ruleId, device, measurement, value, timestamp);
             
-            logger.info("Triggering alarm history API: {}", url);
-            logger.info("Payload: {}", payload);
+            logger.debug("Triggering alarm history API: {}", url);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("POST");
@@ -300,30 +270,12 @@ public class AlarmTrigger implements Trigger {
             conn.getOutputStream().write(payload.getBytes("UTF-8"));
             
             int code = conn.getResponseCode();
-            logger.info("Alarm history API response code: {}", code);
+            logger.debug("Alarm history API response code: {}", code);
             
             if (code == 200) {
-                // 读取成功响应
-                try {
-                    Scanner scanner = new Scanner(conn.getInputStream(), "UTF-8").useDelimiter("\\A");
-                    String response = scanner.hasNext() ? scanner.next() : "";
-                    scanner.close();
-                    logger.info("Alarm history API success response: {}", response);
-                } catch (Exception e) {
-                    logger.warn("Failed to read success response", e);
-                }
-                logger.info("Alarm history updated for rule {}", ruleId);
+                logger.info("Alarm history created/updated successfully for rule {}", ruleId);
             } else {
-                // 读取错误响应
-                try {
-                    Scanner scanner = new Scanner(conn.getErrorStream(), "UTF-8").useDelimiter("\\A");
-                    String errorResponse = scanner.hasNext() ? scanner.next() : "";
-                    scanner.close();
-                    logger.error("Alarm history API error response: {}", errorResponse);
-                } catch (Exception e) {
-                    logger.error("Failed to read error response", e);
-                }
-                logger.warn("Failed to update alarm history, code={}", code);
+                logger.warn("Failed to create/update alarm history, code={}", code);
             }
         } catch (Exception e) {
             logger.error("triggerAlarmHistory exception", e);
@@ -331,11 +283,11 @@ public class AlarmTrigger implements Trigger {
     }
 
     /**
-     * 调用actionHookUrl
+     * 触发动作钩子
      */
     private void triggerActionHook(String device, String measurement, Object value, long timestamp) {
         if (actionHookUrl == null || actionHookUrl.isEmpty()) {
-            logger.info("Action hook URL is null or empty, skipping");
+            logger.debug("Action hook URL is null or empty, skipping");
             return;
         }
         
@@ -343,8 +295,7 @@ public class AlarmTrigger implements Trigger {
             String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
                     ruleId, device, measurement, value, timestamp);
             
-            logger.info("Triggering action hook: {}", actionHookUrl);
-            logger.info("Action hook payload: {}", payload);
+            logger.debug("Triggering action hook: {}", actionHookUrl);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(actionHookUrl).openConnection();
             conn.setRequestMethod("POST");
@@ -353,29 +304,11 @@ public class AlarmTrigger implements Trigger {
             conn.getOutputStream().write(payload.getBytes("UTF-8"));
             
             int code = conn.getResponseCode();
-            logger.info("Action hook response code: {}", code);
+            logger.debug("Action hook response code: {}", code);
             
             if (code == 200) {
-                // 读取成功响应
-                try {
-                    Scanner scanner = new Scanner(conn.getInputStream(), "UTF-8").useDelimiter("\\A");
-                    String response = scanner.hasNext() ? scanner.next() : "";
-                    scanner.close();
-                    logger.info("Action hook success response: {}", response);
-                } catch (Exception e) {
-                    logger.warn("Failed to read action hook success response", e);
-                }
-                logger.info("Action hook triggered for rule {}", ruleId);
+                logger.info("Action hook triggered successfully for rule {}", ruleId);
             } else {
-                // 读取错误响应
-                try {
-                    Scanner scanner = new Scanner(conn.getErrorStream(), "UTF-8").useDelimiter("\\A");
-                    String errorResponse = scanner.hasNext() ? scanner.next() : "";
-                    scanner.close();
-                    logger.error("Action hook error response: {}", errorResponse);
-                } catch (Exception e) {
-                    logger.error("Failed to read action hook error response", e);
-                }
                 logger.warn("Failed to trigger action hook, code={}", code);
             }
         } catch (Exception e) {

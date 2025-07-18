@@ -26,6 +26,8 @@ docker exec -it iotdb bash
 
 #### 1. 编译步骤
 
+**方法一：使用Maven（推荐）**
+
 在GitHub Codespaces或本地终端，进入项目目录：
 
 ```sh
@@ -33,11 +35,45 @@ cd ./iotdb-trigger-alarm
 mvn clean package -pl . -Pget-jar-with-dependencies
 ```
 
-编译成功后，`target/` 目录下会生成：
+**方法二：使用Windows批处理脚本**
+
+如果已安装Maven：
+```cmd
+compile.bat
+```
+
+**方法三：使用Docker编译**
+
+如果没有安装Maven，可以使用Docker：
+```cmd
+compile-docker.bat
+```
+
+**编译成功后，`target/` 目录下会生成：**
 - `iotdb-alarm-trigger-1.0.jar`：主JAR包，包含所有代码和依赖，**部署到IoTDB时请使用此文件**。
 - `original-iotdb-alarm-trigger-1.0.jar`：Maven Shade插件生成的中间产物，仅包含项目自身代码，不包含依赖，**一般无需使用**。
 
-#### 2. 注册触发器方法
+#### 2. 基于官方示例的改进
+
+本触发器代码参考了IoTDB官方示例（LoggerTrigger.java 和 StatisticsUpdaterTrigger.java），主要改进包括：
+
+**代码结构优化：**
+- 简化了数据处理逻辑，参考官方示例的简洁风格
+- 改进了错误处理机制，使用更合适的异常类型
+- 优化了日志输出，减少冗余日志，提高性能
+- 简化了条件判断逻辑，提高代码可读性
+
+**性能优化：**
+- 使用DEBUG级别日志减少生产环境日志量
+- 优化了Tablet数据处理，支持多时间戳批量处理
+- 改进了条件判断的性能，减少不必要的计算
+
+**功能增强：**
+- 支持多测点数据同时处理
+- 改进了条件组合逻辑（AND/OR）
+- 增强了错误恢复机制
+
+#### 3. 注册触发器方法
 
 IoTDB 支持两种触发器JAR包注册方式：
 
@@ -99,23 +135,46 @@ WITH (
 - 推荐生产环境使用 URI 方式，便于集群分发和自动化。
 - 具体可参考[IoTDB官方文档注册示例](https://iotdb.apache.org/zh/UserGuide/latest/User-Manual/Trigger.html#_2-3-示例)
 
-#### 3. 触发器特性
+#### 4. 触发器特性
 - 启动时自动拉取本rule配置，支持多条件、and/or组合、区间等复杂判断，条件判断逻辑与后端保持一致。
 - **重要**：触发器只在条件匹配时才触发告警，如果规则没有配置条件，会记录警告日志并跳过告警检查。
 - fire时只处理本测点/本规则，极致高效。
 - 支持命中时自动调用后端API和actionHookUrl。
 
-#### 4. 典型应用场景
+#### 5. 典型应用场景
 - 精确到单测点/单规则的高性能告警
 - 复杂条件组合（如区间、等于、不等于、and/or等）
 - 支持第三方联动动作
 
-#### 5. 代码结构
+#### 6. 代码结构
 - `AlarmTrigger.java`：主触发器逻辑
 - `AlarmRule.java`：规则结构，支持fromJson
 - `AlarmCondition.java`：条件结构，支持fromJsonNode
 
-#### 6. 注意事项
+#### 7. 测试和验证
+
+**Python测试脚本：**
+项目根目录提供了 `test_trigger_logic.py` 脚本，用于验证触发器逻辑：
+
+```bash
+# 运行测试脚本
+python test_trigger_logic.py
+```
+
+测试脚本会验证：
+- 规则解析功能
+- 条件判断逻辑
+- 多条件组合（AND/OR）
+- 边界情况处理
+
+**测试用例包括：**
+- 温度过高触发告警
+- 湿度过低触发告警
+- 温度和湿度都正常（不触发）
+- 温度和湿度都异常（触发）
+- 缺少数据的情况
+
+#### 8. 注意事项
 - WITH参数只能传字符串，如需复杂结构请用JSON字符串传递并在Java端解析。
 - 触发器注册ON建议精确到实际需要的测点，避免无谓性能消耗。
 - **重要**：触发器路径必须与实际数据路径匹配，建议先检查数据路径再注册触发器。
@@ -138,7 +197,7 @@ SHOW TIMESERIES root.system.snnb.*;
 SELECT * FROM root.system.snnb.*.temperature LIMIT 10;
 ```
 
-#### 7. 后端API接口
+#### 9. 后端API接口
 
 触发器会调用以下后端API接口：
 
@@ -205,7 +264,7 @@ Body:
 }
 ```
 
-#### 8. 测试
+#### 10. 测试
 
 项目根目录提供了测试脚本 `test_createupdate_api.py`，可用于验证API接口功能：
 
@@ -222,7 +281,7 @@ python test_createupdate_api.py
 - 多次调用时的创建/更新逻辑
 - 时间戳相同时的跳过更新逻辑
 
-#### 9. 调试
+#### 11. 调试
 
 ##### 查看触发器日志
 
