@@ -62,7 +62,7 @@ public class AlarmTrigger implements Trigger {
     public boolean fire(Tablet tablet) throws Exception {
         try {
             String devicePath = tablet.getDeviceId();
-            logger.debug("AlarmTrigger.fire() called for device: {}", devicePath);
+            logger.info("AlarmTrigger.fire() called for device: {}", devicePath);
             
             // 若rule为null，重试fetchRuleFromApi一次
             if (rule == null) {
@@ -99,7 +99,7 @@ public class AlarmTrigger implements Trigger {
                             // 使用索引作为key，因为无法直接获取measurement名称
                             String measurementKey = "measurement_" + j;
                             telemetryDict.put(measurementKey, value);
-                            logger.debug("Measurement[{}]: {}, Value: {}", j, schema.getType(), value);
+                            logger.info("Measurement[{}]: {}, Value: {}", j, schema.getType(), value);
                         }
                     }
                 }
@@ -133,7 +133,7 @@ public class AlarmTrigger implements Trigger {
     private AlarmRule fetchRuleFromApi() {
         try {
             String url = apiBaseUrl + "/api/v1/alarm/rules/get/" + ruleId;
-            logger.debug("Fetching rule from API: {}", url);
+            logger.info("Fetching rule from API: {}", url);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
@@ -143,15 +143,17 @@ public class AlarmTrigger implements Trigger {
             conn.setReadTimeout(3000);
             
             int code = conn.getResponseCode();
-            logger.debug("API response code: {}", code);
+            logger.info("API response code: {}", code);
             
             if (code == 200) {
                 Scanner scanner = new Scanner(conn.getInputStream(), "UTF-8").useDelimiter("\\A");
                 String json = scanner.hasNext() ? scanner.next() : "";
                 scanner.close();
                 
+                logger.info("API response JSON: {}", json);
+                
                 AlarmRule rule = AlarmRule.fromJson(json);
-                logger.debug("Rule parsed successfully: {}", rule != null);
+                logger.info("Rule parsed successfully: {}", rule != null);
                 return rule;
             } else {
                 logger.error("fetchRuleFromApi failed, code={}, url={}", code, url);
@@ -198,17 +200,17 @@ public class AlarmTrigger implements Trigger {
      */
     private boolean checkSingleCondition(AlarmCondition cond, Map<String, Object> telemetryDict) {
         String propId = cond.getPropertyIdentifier();
-        logger.debug("Checking condition: propId={}, type={}, threshold={}", 
+        logger.info("Checking condition: propId={}, type={}, threshold={}", 
             propId, cond.getConditionType(), cond.getThresholdValue());
         
         if (!telemetryDict.containsKey(propId)) {
-            logger.debug("Property {} not found in telemetry data", propId);
+            logger.info("Property {} not found in telemetry data", propId);
             return false;
         }
         
         Object value = telemetryDict.get(propId);
         if (value == null) {
-            logger.debug("Property {} value is null", propId);
+            logger.info("Property {} value is null", propId);
             return false;
         }
         
@@ -246,7 +248,7 @@ public class AlarmTrigger implements Trigger {
                     return false;
             }
             
-            logger.debug("Condition result: {} {} {} = {}", numericValue, type, threshold, result);
+            logger.info("Condition result: {} {} {} = {}", numericValue, type, threshold, result);
             return result;
         } catch (NumberFormatException e) {
             logger.error("Failed to parse numeric value: {}", value, e);
@@ -263,7 +265,7 @@ public class AlarmTrigger implements Trigger {
             String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
                     ruleId, device, measurement, value, timestamp);
             
-            logger.debug("Triggering alarm history API: {}", url);
+            logger.info("Triggering alarm history API: {}", url);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("POST");
@@ -274,7 +276,7 @@ public class AlarmTrigger implements Trigger {
             conn.getOutputStream().write(payload.getBytes("UTF-8"));
             
             int code = conn.getResponseCode();
-            logger.debug("Alarm history API response code: {}", code);
+            logger.info("Alarm history API response code: {}", code);
             
             if (code == 200) {
                 logger.info("Alarm history created/updated successfully for rule {}", ruleId);
@@ -291,7 +293,7 @@ public class AlarmTrigger implements Trigger {
      */
     private void triggerActionHook(String device, String measurement, Object value, long timestamp) {
         if (actionHookUrl == null || actionHookUrl.isEmpty()) {
-            logger.debug("Action hook URL is null or empty, skipping");
+            logger.info("Action hook URL is null or empty, skipping");
             return;
         }
         
@@ -299,7 +301,7 @@ public class AlarmTrigger implements Trigger {
             String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d}",
                     ruleId, device, measurement, value, timestamp);
             
-            logger.debug("Triggering action hook: {}", actionHookUrl);
+            logger.info("Triggering action hook: {}", actionHookUrl);
             
             HttpURLConnection conn = (HttpURLConnection) new URL(actionHookUrl).openConnection();
             conn.setRequestMethod("POST");
@@ -308,7 +310,7 @@ public class AlarmTrigger implements Trigger {
             conn.getOutputStream().write(payload.getBytes("UTF-8"));
             
             int code = conn.getResponseCode();
-            logger.debug("Action hook response code: {}", code);
+            logger.info("Action hook response code: {}", code);
             
             if (code == 200) {
                 logger.info("Action hook triggered successfully for rule {}", ruleId);
