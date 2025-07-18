@@ -58,7 +58,7 @@ IoTDB 支持两种触发器JAR包注册方式：
 ```sql
 CREATE STATELESS TRIGGER alarm_trigger_rule_1
 AFTER INSERT
-ON root.system.snnb.*.temperature
+ON root.sjgd.snnb.*.temperature
 AS 'com.sjgd.trigger.alarm.AlarmTrigger'
 WITH (
   'apiBaseUrl'='http://192.168.3.11:48080',
@@ -118,6 +118,25 @@ WITH (
 #### 6. 注意事项
 - WITH参数只能传字符串，如需复杂结构请用JSON字符串传递并在Java端解析。
 - 触发器注册ON建议精确到实际需要的测点，避免无谓性能消耗。
+- **重要**：触发器路径必须与实际数据路径匹配，建议先检查数据路径再注册触发器。
+
+##### 路径匹配规则
+- `*` 匹配一层路径：`root.system.*.temperature` 匹配 `root.system.device1.temperature`
+- `**` 匹配多层路径：`root.system.**.temperature` 匹配 `root.system.product1.device1.temperature`
+- 建议使用 `**` 来匹配多层设备路径
+
+##### 检查数据路径
+在IoTDB CLI中执行以下命令检查实际数据路径：
+```sql
+-- 查看所有时间序列
+SHOW TIMESERIES;
+
+-- 查看特定路径下的时间序列
+SHOW TIMESERIES root.system.snnb.*;
+
+-- 查看最近的数据
+SELECT * FROM root.system.snnb.*.temperature LIMIT 10;
+```
 
 #### 7. 后端API接口
 
