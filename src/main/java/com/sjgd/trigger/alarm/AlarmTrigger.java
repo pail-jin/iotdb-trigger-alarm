@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.tsfile.write.schema.IMeasurementSchema;
 
 /**
  * IoTDB告警触发器，参考官方示例风格
@@ -88,14 +89,17 @@ public class AlarmTrigger implements Trigger {
                 
                 // 构建测点数据字典
                 Map<String, Object> telemetryDict = new HashMap<>();
-                for (int j = 0; j < values.length; j++) {
-                    if (values[j] != null && values[j].getClass().isArray()) {
-                        Object value = java.lang.reflect.Array.get(values[j], i);
+                List<IMeasurementSchema> measurementSchemaList = tablet.getSchemas();
+                for (int j = 0; j < measurementSchemaList.size(); j++) {
+                    IMeasurementSchema schema = measurementSchemaList.get(j);
+                    Object[] columnValues = (Object[]) tablet.getValues()[j];
+                    if (columnValues != null && i < columnValues.length) {
+                        Object value = columnValues[i];
                         if (value != null) {
-                            // 获取测点名称
-                            String measurement = tablet.getSchemas().get(j).getName();
-                            telemetryDict.put(measurement, value);
-                            logger.debug("Measurement: {}, Value: {}", measurement, value);
+                            // 使用索引作为key，因为无法直接获取measurement名称
+                            String measurementKey = "measurement_" + j;
+                            telemetryDict.put(measurementKey, value);
+                            logger.debug("Measurement[{}]: {}, Value: {}", j, schema.getType(), value);
                         }
                     }
                 }
