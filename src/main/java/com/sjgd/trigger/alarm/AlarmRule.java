@@ -30,7 +30,11 @@ public class AlarmRule {
     public static AlarmRule fromJson(String json) {
         try {
             ObjectMapper mapper = new ObjectMapper();
-            JsonNode node = mapper.readTree(json);
+            JsonNode rootNode = mapper.readTree(json);
+            
+            // API返回格式: {"code":200,"msg":"OK","data":{...}}
+            JsonNode node = rootNode.has("data") ? rootNode.get("data") : rootNode;
+            
             AlarmRule rule = new AlarmRule();
             rule.id = node.has("id") ? node.get("id").asText() : null;
             rule.name = node.has("name") ? node.get("name").asText() : null;
@@ -39,6 +43,7 @@ public class AlarmRule {
             if (node.has("threshold")) {
                 rule.threshold = node.get("threshold").asDouble();
             }
+            
             // 解析conditions
             List<AlarmCondition> conds = new ArrayList<>();
             if (node.has("conditions") && node.get("conditions").isArray()) {

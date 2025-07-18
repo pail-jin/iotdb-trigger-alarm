@@ -89,23 +89,32 @@ public class AlarmTrigger implements Trigger {
             // 处理每个时间戳的数据
             for (int i = 0; i < timestamps.length; i++) {
                 long timestamp = timestamps[i];
+                logger.info("=== Processing timestamp[{}]: {} ===", i, timestamp);
                 
                 // 构建测点数据字典
                 Map<String, Object> telemetryDict = new HashMap<>();
                 List<IMeasurementSchema> measurementSchemaList = tablet.getSchemas();
+                logger.info("Total measurements count: {}", measurementSchemaList.size());
+                
                 for (int j = 0; j < measurementSchemaList.size(); j++) {
                     IMeasurementSchema schema = measurementSchemaList.get(j);
                     Object[] columnValues = (Object[]) tablet.getValues()[j];
+                    logger.info("Column[{}]: schema={}, columnValues={}", j, schema.getType(), columnValues);
+                    
                     if (columnValues != null && i < columnValues.length) {
                         Object value = columnValues[i];
+                        logger.info("Column[{}] value[{}]: {}", j, i, value);
+                        
                         if (value != null) {
                             // 使用索引作为key，因为无法直接获取measurement名称
                             String measurementKey = "measurement_" + j;
                             telemetryDict.put(measurementKey, value);
-                            logger.info("Measurement[{}]: {}, Value: {}", j, schema.getType(), value);
+                            logger.info("Added to telemetryDict: {} = {}", measurementKey, value);
                         }
                     }
                 }
+                
+                logger.info("Final telemetryDict: {}", telemetryDict);
                 
                 // 检查条件
                 if (!telemetryDict.isEmpty()) {
@@ -212,6 +221,18 @@ public class AlarmTrigger implements Trigger {
                 
                 AlarmRule rule = AlarmRule.fromJson(json);
                 logger.info("Rule parsed successfully: {}", rule != null);
+                if (rule != null) {
+                    logger.info("Rule ID: {}, Name: {}", rule.getId(), rule.getName());
+                    logger.info("Conditions count: {}", rule.getConditions() != null ? rule.getConditions().size() : 0);
+                    if (rule.getConditions() != null) {
+                        for (int i = 0; i < rule.getConditions().size(); i++) {
+                            AlarmCondition cond = rule.getConditions().get(i);
+                            logger.info("Condition[{}]: propId={}, type={}, threshold={}, relation={}", 
+                                i, cond.getPropertyIdentifier(), cond.getConditionType(), 
+                                cond.getThresholdValue(), cond.getRelation());
+                        }
+                    }
+                }
                 return rule;
             } else {
                 logger.error("fetchRuleFromApi failed, code={}, url={}", code, url);
