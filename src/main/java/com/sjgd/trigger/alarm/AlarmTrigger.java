@@ -400,22 +400,72 @@ public class AlarmTrigger implements Trigger {
     private void triggerAlarmHistory(String device, Map<String, Object> telemetry, long timestamp) {
         try {
             String url = apiBaseUrl + "/api/v1/alarm/history/createupdate";
-            // 构造json字符串，telemetry序列化为json
-            StringBuilder telemetryJson = new StringBuilder("{");
-            int idx = 0;
-            for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
-                if (idx++ > 0) telemetryJson.append(",");
-                telemetryJson.append("\"").append(entry.getKey()).append("\":");
-                Object v = entry.getValue();
-                if (v instanceof Number || v instanceof Boolean) {
-                    telemetryJson.append(v);
-                } else {
-                    telemetryJson.append("\"").append(v).append("\"");
+            
+            // 构造details字段，包含所有触发的测点信息
+            StringBuilder detailsJson = new StringBuilder("{");
+            
+            // 添加触发的条件信息
+            detailsJson.append("\"triggered_conditions\":[");
+            int condIdx = 0;
+            for (AlarmCondition cond : rule.getConditions()) {
+                String propId = cond.getPropertyIdentifier();
+                if (telemetry.containsKey(propId)) {
+                    if (condIdx++ > 0) detailsJson.append(",");
+                    detailsJson.append("{");
+                    detailsJson.append("\"id\":").append(cond.getId()).append(",");
+                    detailsJson.append("\"property_identifier\":\"").append(propId).append("\",");
+                    detailsJson.append("\"condition_type\":\"").append(cond.getConditionType()).append("\",");
+                    detailsJson.append("\"threshold_value\":\"").append(cond.getThresholdValue()).append("\"");
+                    if (cond.getThresholdValue2() != null && !cond.getThresholdValue2().isEmpty()) {
+                        detailsJson.append(",\"threshold_value2\":\"").append(cond.getThresholdValue2()).append("\"");
+                    }
+                    detailsJson.append("}");
                 }
             }
-            telemetryJson.append("}");
-            String payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"telemetry\":%s,\"timestamp\":%d}",
-                    ruleId, device, telemetryJson.toString(), timestamp);
+            detailsJson.append("],");
+            
+            // 添加测点值信息 - 使用last_values字段，避免被后端覆盖
+            detailsJson.append("\"last_values\":{");
+            int valueIdx = 0;
+            for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
+                if (valueIdx++ > 0) detailsJson.append(",");
+                detailsJson.append("\"").append(entry.getKey()).append("\":");
+                Object value = entry.getValue();
+                if (value instanceof Number || value instanceof Boolean) {
+                    detailsJson.append(value);
+                } else {
+                    detailsJson.append("\"").append(value).append("\"");
+                }
+            }
+            detailsJson.append("},");
+            
+            // 添加时间戳信息
+            detailsJson.append("\"timestamp\":").append(timestamp).append(",");
+            detailsJson.append("\"last_timestamp\":").append(timestamp);
+            detailsJson.append("}");
+            
+            // 构造主payload，使用第一个测点作为主要measurement和value
+            String firstMeasurement = null;
+            Object firstValue = null;
+            for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
+                firstMeasurement = entry.getKey();
+                firstValue = entry.getValue();
+                break;
+            }
+            
+            if (firstMeasurement == null) {
+                logger.warn("No measurement data available for alarm trigger");
+                return;
+            }
+            
+            String payload;
+            if (firstValue instanceof Number || firstValue instanceof Boolean) {
+                payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":%s,\"timestamp\":%d,\"details\":%s}",
+                        ruleId, device, firstMeasurement, firstValue, timestamp, detailsJson.toString());
+            } else {
+                payload = String.format("{\"rule_id\":%s,\"device\":\"%s\",\"measurement\":\"%s\",\"value\":\"%s\",\"timestamp\":%d,\"details\":%s}",
+                        ruleId, device, firstMeasurement, firstValue, timestamp, detailsJson.toString());
+            }
             
             logger.info("Triggering alarm history API: {} payload={}", url, payload);
             
@@ -434,6 +484,15 @@ public class AlarmTrigger implements Trigger {
                 logger.info("Alarm history created/updated successfully for rule {}", ruleId);
             } else {
                 logger.warn("Failed to create/update alarm history, code={}", code);
+                // 读取错误响应
+                try {
+                    Scanner scanner = new Scanner(conn.getErrorStream(), "UTF-8").useDelimiter("\\A");
+                    String errorResponse = scanner.hasNext() ? scanner.next() : "";
+                    scanner.close();
+                    logger.error("Error response: {}", errorResponse);
+                } catch (Exception e) {
+                    logger.error("Failed to read error response", e);
+                }
             }
         } catch (Exception e) {
             logger.error("triggerAlarmHistory exception", e);
