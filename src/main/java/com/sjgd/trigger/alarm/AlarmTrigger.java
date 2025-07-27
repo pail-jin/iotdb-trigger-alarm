@@ -404,25 +404,9 @@ public class AlarmTrigger implements Trigger {
             // 构造details字段，包含所有触发的测点信息
             StringBuilder detailsJson = new StringBuilder("{");
             
-            // 添加触发的条件信息
-            detailsJson.append("\"triggered_conditions\":[");
-            int condIdx = 0;
-            for (AlarmCondition cond : rule.getConditions()) {
-                String propId = cond.getPropertyIdentifier();
-                if (telemetry.containsKey(propId)) {
-                    if (condIdx++ > 0) detailsJson.append(",");
-                    detailsJson.append("{");
-                    detailsJson.append("\"id\":").append(cond.getId()).append(",");
-                    detailsJson.append("\"property_identifier\":\"").append(propId).append("\",");
-                    detailsJson.append("\"condition_type\":\"").append(cond.getConditionType()).append("\",");
-                    detailsJson.append("\"threshold_value\":\"").append(cond.getThresholdValue()).append("\"");
-                    if (cond.getThresholdValue2() != null && !cond.getThresholdValue2().isEmpty()) {
-                        detailsJson.append(",\"threshold_value2\":\"").append(cond.getThresholdValue2()).append("\"");
-                    }
-                    detailsJson.append("}");
-                }
-            }
-            detailsJson.append("],");
+            // 直接使用rule中的所有条件
+            detailsJson.append("\"triggered_conditions\":");
+            detailsJson.append(rule.getConditionsJson()).append(",");
             
             // 添加测点值信息 - 使用last_values字段，避免被后端覆盖
             detailsJson.append("\"last_values\":{");

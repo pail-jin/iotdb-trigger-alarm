@@ -26,6 +26,19 @@ public class AlarmRule {
     public Double getThreshold() { return threshold; }
     public void setThreshold(Double threshold) { this.threshold = threshold; }
 
+    /**
+     * 将条件列表转换为JSON字符串
+     */
+    public String getConditionsJson() {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.writeValueAsString(conditions);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "[]";
+        }
+    }
+
     // 反序列化API返回的规则详情
     public static AlarmRule fromJson(String json) {
         try {
