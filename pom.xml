@@ -6,7 +6,7 @@
     
     <groupId>com.sjgd.trigger</groupId>
     <artifactId>iotdb-alarm-trigger</artifactId>
-    <version>1.12</version>
+    <version>1.13</version>
     <packaging>jar</packaging>
     
     <name>IoTDB Alarm Trigger</name>
