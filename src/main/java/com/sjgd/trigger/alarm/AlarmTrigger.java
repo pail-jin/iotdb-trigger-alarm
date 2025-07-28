@@ -35,6 +35,7 @@ public class AlarmTrigger implements Trigger {
     private String actionHookUrl;
     private AlarmRule rule;
 
+
     @Override
     public void onCreate(TriggerAttributes attributes) throws Exception {
         // 打印JAR包信息
@@ -401,15 +402,31 @@ public class AlarmTrigger implements Trigger {
         try {
             String url = apiBaseUrl + "/api/v1/alarm/history/createupdate";
             
-            // 构造details字段，包含所有触发的测点信息
+            // 构造details字段
             StringBuilder detailsJson = new StringBuilder("{");
             
-            // 直接使用rule中的所有条件
-            detailsJson.append("\"triggered_conditions\":");
-            detailsJson.append(rule.getConditionsJson()).append(",");
+            // 添加触发的条件信息
+            detailsJson.append("\"triggered_conditions\":[");
+            int conditionIdx = 0;
+            for (AlarmCondition cond : rule.getConditions()) {
+                String propId = cond.getPropertyIdentifier();
+                // 只添加实际触发的条件（即在telemetry中存在的属性）
+                if (telemetry.containsKey(propId)) {
+                    if (conditionIdx++ > 0) detailsJson.append(",");
+                    detailsJson.append("{");
+                    detailsJson.append("\"property_identifier\":\"").append(propId).append("\",");
+                    detailsJson.append("\"condition_type\":\"").append(cond.getConditionType()).append("\",");
+                    detailsJson.append("\"threshold_value\":\"").append(cond.getThresholdValue()).append("\"");
+                    if (cond.getThresholdValue2() != null && !cond.getThresholdValue2().isEmpty()) {
+                        detailsJson.append(",\"threshold_value2\":\"").append(cond.getThresholdValue2()).append("\"");
+                    }
+                    detailsJson.append("}");
+                }
+            }
+            detailsJson.append("],");
             
-            // 添加测点值信息 - 使用last_values字段，避免被后端覆盖
-            detailsJson.append("\"last_values\":{");
+            // 添加值信息
+            detailsJson.append("\"values\":{");
             int valueIdx = 0;
             for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
                 if (valueIdx++ > 0) detailsJson.append(",");
@@ -423,9 +440,25 @@ public class AlarmTrigger implements Trigger {
             }
             detailsJson.append("},");
             
+            // 添加last_values信息（与values相同）
+            detailsJson.append("\"last_values\":{");
+            int lastValueIdx = 0;
+            for (Map.Entry<String, Object> entry : telemetry.entrySet()) {
+                if (lastValueIdx++ > 0) detailsJson.append(",");
+                detailsJson.append("\"").append(entry.getKey()).append("\":");
+                Object value = entry.getValue();
+                if (value instanceof Number || value instanceof Boolean) {
+                    detailsJson.append(value);
+                } else {
+                    detailsJson.append("\"").append(value).append("\"");
+                }
+            }
+            detailsJson.append("},");
+            
             // 添加时间戳信息
             detailsJson.append("\"timestamp\":").append(timestamp).append(",");
-            detailsJson.append("\"last_timestamp\":").append(timestamp);
+            detailsJson.append("\"last_timestamp\":").append(timestamp).append(",");
+            detailsJson.append("\"trigger_time\":\"").append(new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new java.util.Date(timestamp))).append("\"");
             detailsJson.append("}");
             
             // 构造主payload，使用第一个测点作为主要measurement和value
@@ -529,4 +562,5 @@ public class AlarmTrigger implements Trigger {
             logger.error("triggerActionHook exception", e);
         }
     }
-} 
+
+}

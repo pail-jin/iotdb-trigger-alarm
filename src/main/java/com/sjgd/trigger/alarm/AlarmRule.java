@@ -39,6 +39,23 @@ public class AlarmRule {
         }
     }
 
+    /**
+     * 获取触发的条件列表（根据属性标识符过滤）
+     */
+    public List<AlarmCondition> getTriggeredConditions(List<String> propertyIdentifiers) {
+        if (conditions == null || propertyIdentifiers == null) {
+            return new ArrayList<>();
+        }
+        
+        List<AlarmCondition> triggered = new ArrayList<>();
+        for (AlarmCondition condition : conditions) {
+            if (propertyIdentifiers.contains(condition.getPropertyIdentifier())) {
+                triggered.add(condition);
+            }
+        }
+        return triggered;
+    }
+
     // 反序列化API返回的规则详情
     public static AlarmRule fromJson(String json) {
         try {
